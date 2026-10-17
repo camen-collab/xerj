@@ -216,10 +216,10 @@ where
                 println!("xerj v{}", env!("CARGO_PKG_VERSION"));
                 std::process::exit(0);
             }
-            other => {
-                eprintln!("unknown argument: {other}. Use --help for usage.");
-                std::process::exit(1);
-            }
+            // A usage error exits 2 (the same code `parse_args` uses for a
+            // missing flag value). Exiting 1 here made `xerj nosuch` disagree
+            // with the documented "usage is 2" rule.
+            other => return Err(format!("unknown argument: {other}")),
         }
     }
 
@@ -1443,7 +1443,17 @@ fn parse_count(flag: &str, next: Option<String>) -> Result<usize, String> {
 
 fn parse_index_args() -> IndexCmdArgs {
     // Skip argv[0] (binary) + argv[1] ("index").
-    let mut args = std::env::args().skip(2);
+    parse_index_args_from(std::env::args().skip(2)).unwrap_or_else(|e| {
+        eprintln!("error: {e}. Use --help for usage.");
+        std::process::exit(2);
+    })
+}
+
+fn parse_index_args_from<I>(args: I) -> Result<IndexCmdArgs, String>
+where
+    I: Iterator<Item = String>,
+{
+    let mut args = args;
     let mut index = None;
     let mut file = None;
     let mut batch = 5000usize;
@@ -1466,23 +1476,14 @@ fn parse_index_args() -> IndexCmdArgs {
                 print_index_help();
                 std::process::exit(0);
             }
-            other => {
-                eprintln!("unknown argument: {other}. Use --help for usage.");
-                std::process::exit(1);
-            }
+            other => return Err(format!("unknown argument: {other}")),
         }
     }
 
-    let index = index.unwrap_or_else(|| {
-        eprintln!("error: --index <name> is required");
-        std::process::exit(2);
-    });
-    let file = file.unwrap_or_else(|| {
-        eprintln!("error: --file <path> is required");
-        std::process::exit(2);
-    });
+    let index = index.ok_or("--index <name> is required")?;
+    let file = file.ok_or("--file <path> is required")?;
 
-    IndexCmdArgs {
+    Ok(IndexCmdArgs {
         index,
         file,
         batch,
@@ -1490,7 +1491,7 @@ fn parse_index_args() -> IndexCmdArgs {
         limit,
         config,
         data_dir,
-    }
+    })
 }
 
 fn print_index_help() {
@@ -2277,6 +2278,18 @@ mod decide_flag_tests {
         assert_eq!(args.bind.as_deref(), Some("::1"));
         let args = parse_args_from(argv(&["--port", "-1"])).unwrap();
         assert_eq!(args.port.as_deref(), Some("-1"), "left to the port check");
+    }
+
+    #[test]
+    fn an_unknown_argument_is_a_usage_error_not_a_process_exit() {
+        // Usage errors exit 2 via `parse_args`. This used to `process::exit(1)`
+        // inside the parser, so the documented usage code never ran.
+        let err = parse_args_from(argv(&["not-a-subcommand"])).unwrap_err();
+        assert!(err.contains("unknown argument: not-a-subcommand"), "{err}");
+        let err = super::parse_index_args_from(argv(&["--nope"])).unwrap_err();
+        assert!(err.contains("unknown argument: --nope"), "{err}");
+        let err = super::parse_index_args_from(argv(&["--index", "logs"])).unwrap_err();
+        assert!(err.contains("--file"), "{err}");
     }
 
     #[test]
