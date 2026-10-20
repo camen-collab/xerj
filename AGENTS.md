@@ -56,9 +56,7 @@ decision has three outcomes, and one of them is "send nothing".
   triaging things that are not bugs.
 
 State in the PR that an agent wrote it, and split what you **verified** (commands
-run, output observed) from what you **assumed** (untested). Every number you quote
-must come from a command you actually ran — "this should be faster" is not a
-benchmark. **Do not add `Co-Authored-By` trailers to this repo:** the accountable
+run, output observed) from what you **assumed** (untested). **Do not add `Co-Authored-By` trailers to this repo:** the accountable
 party is the human whose account opened the pull request, and the required
 `verification/cla-signed` check exists so that someone can be asked about the
 change later.
